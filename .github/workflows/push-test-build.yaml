@@ -18,6 +18,12 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Instalación de dependencias para pruebas
+        run: pip install --no-cache-dir --upgrade -r requirements.txt -r requirements.test.txt
+
+      - name: Ejecución de pruebas
+        run: pytest -q --tb=short --disable-warnings --maxfail=1
+
       - name: Definición de variables adicionales de ambiente
         id: vars
         run: |
