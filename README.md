@@ -83,9 +83,7 @@ El siguiente es un servicio básico RESTful HTTP para implementar operaciones de
 - "ENFERMEDAD CRÓNICA"
 - "ENFERMEDAD TERMINAL"
 
-NOTAS:
-- EL SERVICIO DE PREDICCIÓN DE ENFERMEDAD ES UNA FUNCIONALIDAD SIN NINGÚN SUSTENTO MÉDICO, SOLO ES UN MOCK DE UN MODELO DE CLASIFICACIÓN.
-- El historial de predicciones se almacena en memoria, no se tiene persistencia durable
+NOTA: LA SIGUIENTE ES UNA FUNCIONALIDAD SIN NINGÚN SUSTENTO MÉDICO, SOLO ES UN MOCK DE UN MODELO DE CLASIFICACIÓN.
 
 ## Servicio en local con Docker
 
@@ -105,19 +103,13 @@ Solicitar predicciones a través del navegador web:
 - http://localhost:5000/predict?temperature=36&heart_rate=150&blood_pressure=180
 - http://localhost:5000/predict?temperature=34.9&heart_rate=59&blood_pressure=89
 
-Solicitar historial de predicciones:
-- http://localhost:5000/predictions-history
-
 En su defecto en terminal:
 ```bash
-# solicitar predicción: método GET
+# método GET
 curl "http://localhost:5000/predict?temperature=36&heart_rate=120&blood_pressure=90"
 
-# solicitar predicción: método POST
+# método POST
 curl -X POST "http://localhost:5000/predict?temperature=36&heart_rate=120&blood_pressure=90"
-
-# solicitar historial de predicciones
-curl http://localhost:5000/predictions-history
 ```
 
 Remover imagen de docker:
