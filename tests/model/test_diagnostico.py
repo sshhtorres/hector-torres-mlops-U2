@@ -4,6 +4,7 @@ from model.diagnostico import predict
 def test_predict():
     test_cases = [
         (36, 120, 90, "NO ENFERMO"),
+        (34.9, 59, 89, "ENFERMEDAD TERMINAL"),
         (34.9, 120, 90, "ENFERMEDAD CRÓNICA"),
         (36, 59, 90, "ENFERMEDAD CRÓNICA"),
         (36, 120, 89, "ENFERMEDAD CRÓNICA"),

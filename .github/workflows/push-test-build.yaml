@@ -31,13 +31,17 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Construir imagen de contenedor
+        env:
+          GITHUB_REPO: ${{ github.repository }}
         run: |
           docker build \
-            -t ghcr.io/${{ github.repository }}:${{ github.sha }} \
-            -t ghcr.io/${{ github.repository }}:${{ env.CURRENT_BRANCH }} \
+            -t ghcr.io/${GITHUB_REPO,,}:${{ github.sha }} \
+            -t ghcr.io/${GITHUB_REPO,,}:${{ env.CURRENT_BRANCH }} \
             .
 
       - name: Subir imagen de contenedor
+        env:
+          GITHUB_REPO: ${{ github.repository }}
         run: |
-          docker push ghcr.io/${{ github.repository }}:${{ github.sha }} \
-          && docker push ghcr.io/${{ github.repository }}:${{ env.CURRENT_BRANCH }}
+          docker push ghcr.io/${GITHUB_REPO,,}:${{ github.sha }} \
+          && docker push ghcr.io/${GITHUB_REPO,,}:${{ env.CURRENT_BRANCH }}
