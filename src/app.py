@@ -3,9 +3,11 @@ from typing import Union
 from fastapi import FastAPI, Query
 
 from model.diagnostico import predict as model_predict
+from services.predictions_history import PredictionsHistory
 
 
 app = FastAPI()
+history = PredictionsHistory()
 
 
 @app.get("/predict")
@@ -17,5 +19,11 @@ def read_item(
 ):
 
     result = model_predict(temperature, heart_rate, blood_pressure)
+    history.add_prediction_record(temperature, heart_rate, blood_pressure, result)
 
     return {"result": result}
+
+
+@app.get("/predictions-history")
+def read_predictions_history():
+    return history.get_predictions_history()
