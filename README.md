@@ -1,78 +1,85 @@
 # MLOps Demo Caso Salud
 
-El siguiente repo presenta una propuesta de diseño base específica y un demo básico MLOps considerando un caso del sector salud. Se incluye una propuesta general de flujo MLOps como referencia guía para aplicar a casos de manera genérica.
-
-**Caso de trabajo:** "Se requiere construir un modelo que sea capaz de predecir, dados los datos de síntomas de un paciente, si es posible o no que este sufra de alguna enfermedad. Esto se requiere tanto para enfermedades comunes (muchos datos) como para enfermedades huérfanas (pocos datos)."
+El siguiente repo presenta una propuesta de diseño de pipeline de MLOps y un demo básico MLOps considerando un caso del sector salud.
 
 Contenido:
+- [Descripción del problema](#descripción-del-problema)
 - [Diseño MLOps](#diseño-mlops)
-    - [Propuesta específica](#propuesta-específica)
-    - [Propuesta general](#propuesta-general)
 - [Demo Docker](#demo-docker)
     - [Servicio en local con Docker](#servicio-en-local-con-docker)
     - [Pruebas en local con Docker](#pruebas-en-local-con-docker)
 - [Referencias](#referencias)
 
+# Descripción del problema
+
+"Se requiere construir un modelo que sea capaz de predecir, dados los datos de síntomas de un paciente, si es posible o no que este sufra de alguna enfermedad. Esto se requiere tanto para enfermedades comunes (muchos datos) como para enfermedades huérfanas (pocos datos)."
+
+Consideraciones generales asumidas para acotar el problema:
+- Los datos disponibles corresponden a síntomas y paraclínicos de los pacientes. No se tienen imágenes diagnósticas, radiografías, ni otro tipo de exámen que requiera procesos complejos de lectura.
+- La infraestructura de cómputo utilizada para servir las solicitudes del sistema del servicio de salud prestado es de escala media, de tal manera que la información diaria generada demanda bajas especificaciones de cómputo para almacenamiento y procesamiento, pero el histórico acumulado puede demandar el uso de herramientas escalables, por ejemplo, herramientas de procesamiento distribuido.
 
 # Diseño MLOps
 
-## Propuesta específica
-
 El siguiente diseño es una propuesta específica para el caso considerado:
 
-**1. Fuente de datos**: la fuente de datos es información estructurada que corresponde a paraclínicos almacenados en la base de datos del servicio de salud prestado.
+![](./assets/images/diagrama-propuesta-base.png)
 
-**2. Disponibilización de datos**: se extrae la información bruta de la base de datos del servicio de salud utilizando el lenguaje SQL y utilidades de línea de comandos para bases de datos como `psql` para almacenar en local en formato CSV, y se pre-procesa la información transformando datos con la librería Pandas para corregir formatos y limpiar datos erróneos.
+**1. Fuente de datos**:
 
-**3. Almacenamiento de datos para analítica y AI/ML**: se almacena la información pre-procesada en un bucket de Cloud Storage (servicio de almacenamiento de objetos en Google Cloud) para facilitar su acceso y distribución.
+Se tienen las siguientes fuentes de datos de información estructurada:
+- La fuente de datos principal corresponde a los registros de síntomas y paraclínicos de pacientes, información ingresada por parte del personal de salud a través de los servicios transaccionales y operacionales del sistema, usualmente sistemas SAP, que almacenan dichos registros en la base de datos del servicio de salud prestado. Se asume que la base de datos es relacional OLTP, por ejemplo, PostgreSQL a través de una instancia de Google Cloud SQL.
+- La fuente complementaria de datos corresponde a conjuntos de datos de referencia de salúd pública de entidades reconocidas, por ejemplo, la Organización Mundial de Salud - OMS (https://www.who.int/data), que sirven para robustecer el volumen de información para el entrenamiento de modelos que requieran mayor número de datos.
 
-**4. Análisis exploratorio de datos**: utilizando un notebook de Jupyter se hace el análisis exploratorio de datos donde se identifican las distribuciones de los datos, se corrigen posibles desbalances de categorías que requieran un submuestreo, se buscan posibles correlaciones de los paraclínicos y las condiciones de salud, y se definen características (features) para la construcción de modelos.
+**2. Disponibilización de datos**:
 
-**5. Desarrollo y experimentación de modelos y pipelines AI/ML**: utilizando un notebook de Jupyter se normalizan y codifican los datos; se seleccionan los tipos de modelos de árboles de decision (random forest), XGBoost, y red MLP (Multilayer Perceptron) para clasificación multiclase de las posibles enfermedades de los pacientes; y se aplica un protocolo de optimización y evaluación con datos de entrenamiento (70%), validación (10%), y prueba (20%), utilizando una herramienta de seguimiento de experimentos como MLFlow para registrar las métricas de clasificación mutliclase como F1, precisión, exhaustividad (recall), y matriz de confusión.
+Se desarrollan y ejecutan dos tipos de pipelines para disponibilización de datos. Estos tipos de pipelines se diferencian en la extracción:
+- Extracción diaria de la información bruta de la base de datos del servicio de salud utilizando el lenguaje SQL y utilidades de línea de comandos para bases de datos como `psql` que permite almacenar la información en formato CSV.
+- Extracción semanal de conjuntos de datos de referencia de las entidades reconocidas de salud a través de solicitudes HTTP.
 
-Una vez establecido el modelo con mejor desempeño, se crea un pipeline de Scikit-learn compuesto por los pasos de normalización, codificación, y predicción, que se serializa en formato PKL como serialización Pickle soportada por Python, y se almacena en un bucket de Cloud Storage (servicio de almacenamiento de objetos en Google Cloud) para facilitar su acceso y distribución.
+Una vez extraída la información, se pre-procesa la información transformando datos con la librería Polars de Python para corregir formatos y limpiar datos erróneos; y posteriormente se emplea el servicio DLP de Google Cloud para enmascarar, ocultar, y remover información sensible de los pacientes como medida de protección y privacidad de datos de los pacientes (es posible que la información de las entidades de salud reconocidas no arrojen mayores ).
 
-**6. Integración continua a partir de actualización de repositorios Git**: se suben los cambios necesarios en el repositorio de Git que define el servicio RESTful desarrollado con FastAPI en Python, compatible con el formato PKL, y se ejecuta un pipeline de GitHub Actions que evalúa las pruebas unitarias sobre las predicciones del servicio, y crea los artefactos de despliegue del servicio.
+La ejecución de estos pipelines ETL de datos se realiza a través de instancias de Google Cloud Run Jobs (ambiente serverless de ejecución de trabajos Batch), y se  automatizan y orquestan como DAGs de Apache Airflow a través Google Cloud Composer (implementación manejada de Apache Airflow).
 
-**7. Despliegue continuo:** a través de un pipeline de GitHub Actions se despliega el servicio RESTful de predicción en Cloud Run (servicio serverless de Google Cloud).
+**3. Almacenamiento de datos para analítica y AI/ML**:
 
-**8. Observabilidad AI/ML:** al final de cada día se ejecuta un trabajo programado en Cloud Run Jobs (servicio para ejecución batch de Google Cloud) que alerte sobre:
-* cambios de deriva de los datos de entrada del servicio RESTful de predicción, almacenanados en Firebase (base de datos serverless de Google Cloud).
-* cambios de deriva de los nuevos datos registrados en la base de datos del servicio de salud prestado.
-* disminución de las métricas de evaluación de desempeño del modelo según nuevos datos del servicio de salud prestado y sus correspondientes nuevas etiquetas de clasificación de enfermedad definidas los médicos.
+Se almacena la información pre-procesada en un bucket de Google Cloud Storage (servicio de almacenamiento de objetos), empleado como lago de datos facilitar el acceso y distribución de los datos. El formato de archivo utilizado es Parquet para mayor eficiencia de compresión, y por tanto de almacenamiento y transmisión de datos.
 
-**9. Reentrenamiento:** se automatiza a través de un pipeline de GitHub Actions el reentrenamiento de los tipos de modelos utilizados previamente que permita encontrar un nuevo modelo con mejor desempeño a partir de los nuevos datos del servicio de salud prestado.
+**4. Análisis exploratorio de datos**:
 
-## Propuesta general
+En una instancia de Vertex AI Workbench (instancia manejada de Jupyter Lab) se realiza el análisis exploratorio de datos donde se identifican las distribuciones de los datos, se evalúa la necesidad y posibilidad de imputar datos, se corrigen posibles desbalances de categorías que requieran un submuestreo, se buscan posibles correlaciones de los síntomas, paraclínicos y las condiciones de salud; y se definen características (features) para la construcción de modelos. Se emplean las librerías Numpy y Pandas para procesamiento de datos, así como las librerías Matplotlib y Seaborn para visualización de datos.
 
-El siguiente diseño es una propuesta base de una ruta general para implementar un sistema de AI/ML según requerimientos específicos del problema y la organización. Si bien presenta un escenario con múltiples roles y tareas, se pueden simplificar según capacidades disponibles. Se referencian servicios y tecnologías principalmente de Google Cloud y algunas alternativas de uso libre.
+**5. Desarrollo y experimentación de modelos y pipelines AI/ML**:
 
-![](assets/images/diagrama-propuesta-base.jpg)
+En una instancia de Vertex AI Workbench (instancia manejada de Jupyter Lab) se normalizan y codifican los datos; se seleccionan los tipos de modelos de árboles de decision (random forest), XGBoost, y red MLP (Multilayer Perceptron) para clasificación multiclase de las posibles enfermedades de los pacientes; y se aplica un protocolo de optimización mediante validación cruzada con datos de entrenamiento (80%), y evaluación con datos de prueba (20%), utilizando Vertex AI Experiments como herramienta de seguimiento de experimentos para registrar las métricas de clasificación mutliclase como F1, precisión, exhaustividad (recall), y matriz de confusión de las iteraciones del proceso.
 
-**1. Fuente de datos**: se considera inicialmente que la principal fuente de datos corresponde a los sistemas de entrada que utiliza el personal de salud para describir las condiciones y procesos clínicos de los pacientes, es decir, los sistemas operacionales y transaccionales. Sin embargo, según requerimientos específicos, se podrían extraer datos de otras fuentes de referencia, por ejemplo, de investigación. Estos datos podrían ser tanto estructurados o no estructurados.
+Una vez establecido el modelo con mejor desempeño, se crea un pipeline de Scikit-learn compuesto por el procesamiento de los datos de entrada (normalización, codificación) y predicción, que se serializa en formato PKL como serialización Pickle soportada por Python, y se sube a Vertex AI Model Registry.
 
-**2. Disponibilización de datos**: la disponibilización de datos a usuarios internos (analistas, científicos, ingenieros ML, especialistas de negocio) se realiza a través de pipelines ETL, ELT, y ET, tanto en batch como en streaming, implementados por ingenieros de datos, principalmente para asegurar compatibilidad y cumplir con normatividad aplicable, por ejemplo, privacidad de datos. La ejecución de esta tarea puede ser automatizada y orquestada de manera periódica.
+**6. Integración continua (CI)**:
 
-**3. Almacenamiento de datos para analítica y AI/ML**: la segmentación de sistemas de almacenamiento enfocados a analítica y AI/ML optimiza los recursos de infraestructura según el tipo de uso; facilita la integración con herramientas de procesamiento, análisis y modelamiento; y permite implementar gobierno de datos. Se presentan tecnologías escalables y elásticas según requerimientos específicos del caso.
+Se ajusta en el repositorio de código la configuración que referencia el nuevo modelo a utilizar y se sube el cambio correspondiente a una rama del repositorio remoto de Git que define el servicio RESTful desarrollado con FastAPI en Python, compatible con el formato PKL, que posteriormente inicia la ejecución de un pipeline de integración continua a través del servicio Google Cloud Build (servicio serverless de CI), que evalúa las pruebas unitarias sobre las predicciones del servicio, y crea una imagen de contenedor como artefacto de despliegue del servicio.
 
-**4. Análisis exploratorio de datos**: el análisis exploratorio de datos es crucial para conocer y describir las características y condiciones de los datos disponibles. Esto para identificar las características (features) más relevantes para los modelos, o contestar preguntas de negocio. Dependiendo del propósito específico, este análisis lo podrían realizar analistas, científicos de datos, e ingenieros ML. Según los requerimientos específicos del caso, se podría ejecutar en una máquina (local o en la nube) o en servicios escalables como los presentados Dataproc (Spark, PySpark) o Dataflow de Google Cloud.
+**7. Despliegue continuo (CD):**
 
-**5A. Inteligencia de negocio y reportería**: la presentación y reportería de descriptores, perspectivas, y conclusiones de negocio a usuarios internos como tomadores de decisión hace parte de la estructura fundamental de un sistema de datos y analítica para orientar estrategias y operaciones. La ejecución de esta tarea puede ser automatizada y orquestada de manera periódica.
+Se actualiza una configuración de Google Cloud Deploy (servicio serverless de CD) para desplegar de manera continua la nueva versión del servicio RESTful de predicción en Google Cloud Run (servicio serverless de ejecución de servicios).
 
-**5B. Desarrollo y experimentación de modelos y pipelines AI/ML**: las estrategias para desarrollar, optimizar, y experimentar con modelos y pipelines de AI/ML se ejecutan a través de las etapas de preparación de datos, exploración y definición de características (ingeniería de características), entrenamiento y evaluación de modelos. Esta fase puede realizarse en local o a través de servicios escalables según requerimientos específicos. Se recomienda utilizar un registro de experimentos, así como un repositorio de los modelos desarrollados.
+**8. Almacenamiento de datos de entrada del servicio de predicción en producción:**
 
-**6. Integración continua a partir de actualización de repositorios Git**: un flujo CI/CD inicia con la actualización del repositorio de código, y opcionalmente el repositorio GitOps. La integración construye los artefactos de modelos y pipelines, prueba sus funcionalidades, y si las pruebas son exitosas entonces actualiza los repositorios de modelos y artefactos.
+Los registros de síntomas y paraclínicos de pacientes correpsondientes a datos de entrada del servicio RESTful de predicción en producción se almacenan en Firebase (base de datos serverless de Google Cloud). Esta información es de especial interés para evaluar posteriormente cambios de deriva de datos, descrito en la siguiente sección.
 
-**7. Despliegue continuo:** despliegue de los artefactos como servicio y pipelines con ejecución automatizada y orquestada. Los servicios son accedidos por la capa de servicios transaccionales y operacionales, y por analistas, científicos, e ingenieros ML.
+**9. Observabilidad AI/ML:**
 
-**8. Analítica operacional**: los servicios y pipelines de AI/ML pueden procesar datos recientes del sistema para automatizar ajustes de la operación que optimicen el cumplimiento de objetivos de negocio. Estos procesos se implementan principalmente en tiempo real, sin embargo, según requerimientos se pueden ejecutar de manera periódica.
+Al final de cada día se ejecutan trabajos programados en Vertex AI Model Monitoring que alerten sobre:
+* Deriva de los datos de entrada del servicio RESTful de predicción.
+* Deriva de los nuevos datos en la base de datos del servicio de salud prestado.
+* Disminución en las métricas de desempeño del modelo, evaluadas a partir de los nuevos datos y sus correspondientes etiquetas de enfermedad definidas por el personal médico.
 
-**9. Observabilidad AI/ML**: en producción se deben monitorear la deriva de datos (data drift), la deriva de concepto (concept drift), y el desempeño de los modelos con los nuevos datos del sistema para alertar sobre la efectividad de los servicios y pipelines de AI/ML. En caso que se presenten desviaciones, es posible reentrenar los modelos como respuesta del sistema.
+Estas posibles alertas inician el reentrenamiento de modelos como proceso continuo.
 
-**10. Flujo CI/CD automatizado de reentrenamiento:** si se tiene un grado de madurez de procesos que asegura el reentrenamiento de modelos con una alta evaluación de sus métricas, este reentrenamiento puede iniciar un flujo de CI/CD de manera automatizada. En su defecto, la decisión de actualizar los modelos utilizados en producción es aprobada de manera manual.
+**10. Entrenamiento continuo (CT):**
 
-**11. Entrenamiento continuo:** el reentrenamiento continuo de modelos a partir de nuevos datos es un proceso que requiere un grado avanzado de madurez y robustez al sistema, infraestructura y equipo técnico. Según las alertas emitidas por los mecanismos y servicios de observabilidad, se procede a reentrenar un nuevo modelo bajo las nuevas condiciones registradas en el sistema.
+El entrenamiento del modelo empleado en producción se automatiza a través de Vertex AI Pipelines y Kubeflow a partir de los tipos de modelos utilizados previamente en la etapa de desarrollo, de tal manera que se optimice un nuevo modelo con mejor desempeño a partir de los nuevos datos disponibles del servicio de salud prestado. Una vez establecido el pipeline de Scikit-learn compuesto por el procesamiento de datos de entrada y predicción con el nuevo modelo, que se surten los pasos descritos previamente en la etapa de desarrollo del modelo, específicamente, respecto a serialización del modelo y registro en Vertex AI Model Registry.
 
+Posteriormente, se automatiza el ajuste en el repositorio de código de la configuración que referencia el nuevo modelo a desplegar, y se surten las etapas de integración y despliegue continuos (CI/CD) descritas previamente.
 
 # Demo Docker
 
